@@ -1,0 +1,49 @@
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Secret Project</title>
+    <style>
+      body { 
+        background-color: #000000; 
+        text-align: center;
+      }
+      canvas { 
+        margin-top: 125px;
+        background-color: #222222; 
+      }
+    </style>
+  </head>
+  <body onload="init();">
+  	<canvas id="game-canvas" width="1024" height="512"></canvas>
+    <script src="./src/pixi.min.js"></script>
+    <script>
+    function init() {
+      stage = new PIXI.Container();
+
+      renderer = PIXI.autoDetectRenderer(
+        1024,
+        512,
+        {view:document.getElementById("game-canvas")}
+      );
+
+      var farTexture = PIXI.Texture.fromImage("./img/bg_far_placeholder.png");
+      far = new PIXI.Sprite(farTexture);
+      far.position.x = 0;
+      far.position.y = 0;
+      stage.addChild(far);
+
+      requestAnimationFrame(update);
+
+    }
+
+    function update() {
+      far.position.x -= 0.128;
+      //mid.position.x -= 0.64;
+
+      renderer.render(stage);
+
+      requestAnimationFrame(update);
+    }
+  </script>
+  </body>
+</html>
