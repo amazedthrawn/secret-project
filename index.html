@@ -7,43 +7,132 @@
         background-color: #000000; 
         text-align: center;
       }
-      canvas { 
+      canvas {
         margin-top: 125px;
-        background-color: #222222; 
       }
     </style>
   </head>
-  <body onload="init();">
-  	<canvas id="game-canvas" width="1024" height="512"></canvas>
+  <body>
     <script src="./src/pixi.min.js"></script>
     <script>
-    function init() {
-      stage = new PIXI.Container();
+    const app = new PIXI.Application({
+      width: 1024, height: 512, backgroundColor: 0x333333, resolution: window.devicePixelRatio || 1,
+    });
 
-      renderer = PIXI.autoDetectRenderer(
-        1024,
-        512,
-        {view:document.getElementById("game-canvas")}
+    document.body.appendChild(app.view);
+
+    const container = new PIXI.Container();
+
+    app.stage.addChild(container);
+
+    const farTexture = PIXI.Texture.from('./img/bg_far_placeholder.png');
+    const midTexture = PIXI.Texture.from('./img/bg_mid_placeholder.png');
+    const railsTexture = PIXI.Texture.from('./img/rail.png');
+
+    const trainTexture = PIXI.Texture.from('./img/train_placeholder.png');
+
+    const far = new PIXI.TilingSprite(farTexture, app.screen.width, app.screen.height);
+    const mid = new PIXI.TilingSprite(midTexture, app.screen.width, app.screen.height);
+    const rails = new PIXI.TilingSprite(railsTexture, app.screen.width, railsTexture.height);
+
+    const train = new PIXI.Sprite(trainTexture);
+
+    speed = 50;
+    speedMin = 50;
+    speedMax = 200;
+    const speedDelta = 1;
+
+    isAccelerating = false;
+
+    far.x = 0;
+    far.y = 0;
+    container.addChild(far);
+    mid.x = 0;
+    mid.y = 0;
+    container.addChild(mid);
+    rails.x = 0;
+    rails.y = 391;
+    container.addChild(rails);
+    train.x = 100;
+    train.y = 225;
+    container.addChild(train);
+
+    app.ticker.add(() => {
+      if (isAccelerating) {
+        if (speed <= speedMax) {
+          speed += speedDelta * (1 - speed/speedMax);
+        } 
+      } else {
+        if (speed >= speedMin) {
+          speed -= speedDelta;
+        }
+      }
+      train.x = 100 - speedMin + speed;
+
+      far.tilePosition.x -= 0.01 * speed;
+      mid.tilePosition.x -= 0.05 * speed;
+      rails.tilePosition.x -= 0.07 * speed;
+    });
+
+    let forwardKey = keyboard("d");
+
+    forwardKey.press = () => {
+      isAccelerating = true;
+    };
+    forwardKey.release = () => {
+      isAccelerating = false;
+    }
+
+
+
+    // keyboard stuff
+    function keyboard(value) {
+      let key = {};
+      key.value = value;
+      key.isDown = false;
+      key.isUp = true;
+      key.press = undefined;
+      key.release = undefined;
+      //The `downHandler`
+      key.downHandler = event => {
+        if (event.key === key.value) {
+          if (key.isUp && key.press) key.press();
+          key.isDown = true;
+          key.isUp = false;
+          event.preventDefault();
+        }
+      };
+
+      //The `upHandler`
+      key.upHandler = event => {
+        if (event.key === key.value) {
+          if (key.isDown && key.release) key.release();
+          key.isDown = false;
+          key.isUp = true;
+          event.preventDefault();
+        }
+      };
+
+      //Attach event listeners
+      const downListener = key.downHandler.bind(key);
+      const upListener = key.upHandler.bind(key);
+      
+      window.addEventListener(
+        "keydown", downListener, false
       );
-
-      var farTexture = PIXI.Texture.from("./img/bg_far_placeholder.png");
-      far = new PIXI.Sprite(farTexture);
-      far.position.x = 0;
-      far.position.y = 0;
-      stage.addChild(far);
-
-      requestAnimationFrame(update);
-
+      window.addEventListener(
+        "keyup", upListener, false
+      );
+      
+      // Detach event listeners
+      key.unsubscribe = () => {
+        window.removeEventListener("keydown", downListener);
+        window.removeEventListener("keyup", upListener);
+      };
+      
+      return key;
     }
-
-    function update() {
-      far.position.x -= 0.128;
-      //mid.position.x -= 0.64;
-
-      renderer.render(stage);
-
-      requestAnimationFrame(update);
-    }
+    
   </script>
   </body>
 </html>
