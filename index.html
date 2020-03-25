@@ -49,7 +49,8 @@
 
     settings = {
       isRunning: true,
-      isSoundOn: true
+      isSoundOn: true,
+      isShooting: false
     }
 
     // read muted status from local storage
@@ -184,6 +185,7 @@
 
     var soundTimer = 0;
     var spawnTimer = 0;
+    var shootingTimer = 0;
 
     // start screen
     doGameStart();
@@ -217,6 +219,15 @@
         soundTimer = 0;
         soundChaga.play();
       }
+      // process shooting
+      if (settings.isShooting) {
+        shootingTimer++;
+        if (shootingTimer > 10) {
+          shootingTimer = 0;
+          fireBulletHandler();
+        }  
+      }
+      
       // process bullets
       for (var i = 0; i < bullets.length; i++) {
         const bullet = bullets[i];
@@ -452,11 +463,21 @@
       return part1 && part2 && part3 && part4;
     }
 
-    app.renderer.plugins.interaction.on('pointerdown', fireBulletHandler);
+    app.renderer.plugins.interaction.on('pointerdown', firePointerDownHandler);
+    app.renderer.plugins.interaction.on('pointerup', firePointerUpHandler);
 
-    function fireBulletHandler(event) {
-        var coordX = event.data.global.x;
-        var coordY = event.data.global.y;
+    function firePointerDownHandler() {
+      settings.isShooting = true;
+    }
+
+    function firePointerUpHandler() {
+      settings.isShooting = false;
+    }
+
+    function fireBulletHandler() {
+        var mouseCoords = app.renderer.plugins.interaction.mouse.global;
+        var coordX = mouseCoords.x;
+        var coordY = mouseCoords.y;
         if ((coordX < menu.width) && (coordY < menu.height)) {
           return;
         }
