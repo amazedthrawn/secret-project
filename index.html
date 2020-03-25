@@ -14,36 +14,97 @@
   </head>
   <body>
     <script src="./src/pixi.min.js"></script>
+    <script src="./src/pixi-sound.js"></script>
     <script>
+
+    // configurable variables
+    const vars = {
+      appWidth: 1024,
+      appHeight: 512,
+      speedMin: 50,
+      speedMax: 200,
+      speedDelta: 1,
+      trainOffsetX: 100,
+      trainOffsetY: 305,
+      railsOffsetY: 391,
+      bulletSpeed: 5,
+      bulletRotationSpeed: 0.17,
+    }
+
+    const textures = {
+      zeroBG: PIXI.Texture.from('./img/bg_zero.png'), 
+      farBG: PIXI.Texture.from('./img/bg_far.png'),
+      midBG: PIXI.Texture.from('./img/bg_mid.png'),
+      rails: PIXI.Texture.from('./img/rail.png'),
+      train: PIXI.Texture.from('./img/train.png'),
+      fonk: PIXI.Texture.from('./img/fonk.png'),
+      menu: PIXI.Texture.from('./img/menu_bg.png'),
+      menuButtonReset: PIXI.Texture.from('./img/menu_btn_reset.png'),
+      menuButtonPause: PIXI.Texture.from('./img/menu_btn_pause.png'),
+      menuButtonPlay: PIXI.Texture.from('./img/menu_btn_play.png'),
+      menuButtonSound: PIXI.Texture.from('./img/menu_btn_sound.png'),
+      menuButtonSoundOff: PIXI.Texture.from('./img/menu_btn_sound_off.png'),
+      ghost: PIXI.Texture.from('./img/ghost.png'),
+    }
+
+    settings = {
+      isRunning: true,
+      isSoundOn: true
+    }
+
+    // read muted status from local storage
+    if (localStorage.getItem('isMuted') === "true") {
+      settings.isSoundOn = false;
+    }
+
+    // application start
     const app = new PIXI.Application({
-      width: 1024, height: 512, backgroundColor: 0x333333, resolution: window.devicePixelRatio || 1,
+      width: vars.appWidth, height: vars.appHeight, backgroundColor: 0x333333, resolution: window.devicePixelRatio || 1,
     });
-
     document.body.appendChild(app.view);
-
     const container = new PIXI.Container();
-
     app.stage.addChild(container);
 
-    const farTexture = PIXI.Texture.from('./img/bg_far_placeholder.png');
-    const midTexture = PIXI.Texture.from('./img/bg_mid_placeholder.png');
-    const railsTexture = PIXI.Texture.from('./img/rail.png');
+    // init settings
 
-    const trainTexture = PIXI.Texture.from('./img/train_placeholder.png');
 
-    const far = new PIXI.TilingSprite(farTexture, app.screen.width, app.screen.height);
-    const mid = new PIXI.TilingSprite(midTexture, app.screen.width, app.screen.height);
-    const rails = new PIXI.TilingSprite(railsTexture, app.screen.width, railsTexture.height);
+    // create sprites for everything
+    const zeroBG = new PIXI.TilingSprite(textures.zeroBG, app.screen.width, app.screen.height);
+    const far = new PIXI.TilingSprite(textures.farBG, app.screen.width, app.screen.height);
+    const mid = new PIXI.TilingSprite(textures.midBG, app.screen.width, app.screen.height);
 
-    const train = new PIXI.Sprite(trainTexture);
+    const rails = new PIXI.TilingSprite(textures.rails, app.screen.width, 28);
+    const train = new PIXI.Sprite(textures.train);
+    const fonk = new PIXI.Sprite(textures.fonk);
 
-    speed = 50;
-    speedMin = 50;
-    speedMax = 200;
-    const speedDelta = 1;
+    const menu = new PIXI.TilingSprite(textures.menu, app.screen.width, 48);
+    const menuButtonReset = new PIXI.Sprite(textures.menuButtonReset);
+    const menuButtonPause = new PIXI.Sprite(textures.menuButtonPause);
+    const menuButtonSound = new PIXI.Sprite(textures.menuButtonSound);
 
-    isAccelerating = false;
+    const scoreTextStyle = new PIXI.TextStyle({
+      fontFamily: 'sans-serif',
+      fill: '#fdd14d',
+      stroke: '#aaaaaa',
+      strokeThickness: 2,
+      dropShadow: true,
+      dropShadowColor: '#222222',
+      dropShadowBlur: 2,
+      dropShadowDistance: 2
+    });
 
+    totalScore = 0;
+    topScore = 0;
+    if (localStorage.getItem("topScore")) {
+      topScore = parseInt(localStorage.getItem("topScore"));
+    }
+    const menuScoreText = new PIXI.Text('0', scoreTextStyle);
+    const menuTopScoreText = new PIXI.Text(topScore, scoreTextStyle);
+
+    // configure sprites
+    zeroBG.x = 0;
+    zeroBG.y = 0;
+    container.addChild(zeroBG);
     far.x = 0;
     far.y = 0;
     container.addChild(far);
@@ -51,29 +112,55 @@
     mid.y = 0;
     container.addChild(mid);
     rails.x = 0;
-    rails.y = 391;
+    rails.y = vars.railsOffsetY;
     container.addChild(rails);
-    train.x = 100;
-    train.y = 225;
+    train.x = vars.trainOffsetX;
+    train.y = vars.trainOffsetY;
     container.addChild(train);
+    fonk.x = train.x + 30;
+    fonk.y = train.y + 20;
+    menu.x = 0;
+    menu.y = 0;
+    container.addChild(menu);
 
-    app.ticker.add(() => {
-      if (isAccelerating) {
-        if (speed <= speedMax) {
-          speed += speedDelta * (1 - speed/speedMax);
-        } 
-      } else {
-        if (speed >= speedMin) {
-          speed -= speedDelta;
-        }
-      }
-      train.x = 100 - speedMin + speed;
+    menuButtonReset.x = 400;
+    menuButtonReset.y = 0;
+    menuButtonReset.interactive = true;
+    menuButtonReset.buttonMode = true;
+    menuButtonReset.on('pointerdown', menuButtonResetOnClick);
+    container.addChild(menuButtonReset);
 
-      far.tilePosition.x -= 0.01 * speed;
-      mid.tilePosition.x -= 0.05 * speed;
-      rails.tilePosition.x -= 0.07 * speed;
-    });
+    menuButtonPause.x = 800;
+    menuButtonPause.y = 0;
+    menuButtonPause.interactive = true;
+    menuButtonPause.buttonMode = true;
+    menuButtonPause.on('pointerdown', menuButtonPauseOnClick);
+    container.addChild(menuButtonPause);
 
+    menuButtonSound.x = 900;
+    menuButtonSound.y = 0;
+    menuButtonSound.interactive = true;
+    menuButtonSound.buttonMode = true;
+    menuButtonSound.on('pointerdown', menuButtonSoundOnClick);
+    container.addChild(menuButtonSound);
+
+    menuScoreText.x = 100;
+    menuScoreText.y = 0;
+    container.addChild(menuScoreText);
+
+    menuTopScoreText.x = 250;
+    menuTopScoreText.y = 0;
+    container.addChild(menuTopScoreText);
+
+    // init state variables
+    speed = 50;
+    isAccelerating = false;
+
+    // init bullets and enemies
+    bullets = [];
+    enemies = [];
+
+    // keyboard events processing
     let forwardKey = keyboard("d");
 
     forwardKey.press = () => {
@@ -83,9 +170,321 @@
       isAccelerating = false;
     }
 
+    // sound processing
+    const soundChaga = PIXI.sound.Sound.from('sounds/chaga_chaga.mp3');
+    soundChaga.loop = false;
+    //sound.play();
+    const soundThrow = PIXI.sound.Sound.from('sounds/throw.mp3');
+    soundThrow.volume = 0.02;
+
+    const soundFonk = PIXI.sound.Sound.from('sounds/fonk.mp3');
+    soundFonk.volume = 0.03;
+
+    updateMenuButtonSound();
+
+    var soundTimer = 0;
+    var spawnTimer = 0;
+
+    // start screen
+    doGameStart();
+
+    // main loop
+    app.ticker.add((delta) => {
+      // calculate train speed
+      if (isAccelerating) {
+        if (speed <= vars.speedMax) {
+          speed += vars.speedDelta * (1 - speed / vars.speedMax);
+        } 
+      } else {
+        if (speed >= vars.speedMin) {
+          speed -= vars.speedDelta;
+        }
+      }
+      // change train position
+      train.x = 100 - vars.speedMin + speed;
+      fonk.x = train.x + 20;
+      // change BG speed
+      far.tilePosition.x -= 0.01 * speed;
+      mid.tilePosition.x -= 0.05 * speed;
+      rails.tilePosition.x -= 0.07 * speed;
+      // change sound delay ...
+      var speedDiff = Math.abs(((speed - vars.speedMin) / (vars.speedMax - vars.speedMin)));
+      var delaySpeedTest = 1.1 * speedDiff + 1;
+      // ... and change sound speed
+      soundTimer++;
+      var soundDelay = Math.round (70 / (delaySpeedTest));
+      if (soundTimer > soundDelay) {
+        soundTimer = 0;
+        soundChaga.play();
+      }
+      // process bullets
+      for (var i = 0; i < bullets.length; i++) {
+        const bullet = bullets[i];
+        // move the bullet
+        bullet.x += bullet.speedX;
+        bullet.y += bullet.speedY;
+        // rotate the bullet
+        bullet.rotation += vars.bulletRotationSpeed * delta;
+
+        // mark bullets outside of play area for removal
+        // distance from canvas edges to remove bullets
+        var deleteOffset = 20; 
+        // NB: add menu height to top offset
+        var isOutOfBounds = (bullet.x > vars.appWidth - deleteOffset)
+          || (bullet.x < deleteOffset)
+          || (bullet.y > vars.appHeight - deleteOffset)
+          || (bullet.y < deleteOffset + menu.height);
+        if (isOutOfBounds) {
+          bullet.isAlive = false;
+        }
+      }
+      // get bullets to remove
+      var bulletsToRemove = bullets.filter(function(value, index, arr) {
+        return (value.isAlive == false);
+      });
+      for (var i = 0; i < bulletsToRemove.length; i++) {
+        const tmpBullet = bulletsToRemove[i];
+        tmpBullet.destroy();
+      }
+      // update bullets
+      var updatedBullets = bullets.filter(function(value, index, arr) {
+        return (value.isAlive == true);
+      });
+      bullets = updatedBullets.slice(0);
+
+      // update score
+      var scoreDelta = speed / 1000;
+      totalScore = totalScore + scoreDelta;
+      displayScore = parseInt(totalScore);
+      menuScoreText.text = displayScore;
+
+      // update total score
+      if (displayScore % 10 == 0) {
+        if (displayScore > topScore) {
+          topScore = displayScore;
+          localStorage.setItem("topScore", topScore);
+          menuTopScoreText.text = topScore;
+        }
+      }
+
+      // spawn enemies
+      spawnTimer++;
+      if (spawnTimer > 10) {
+        spawnTimer = 0;
+        spawnEnemy();
+      }
+      processEnemies(speed);
+
+    });
+
+    function spawnEnemy() {
+      var enemiesLimit = 5;
+      enemiesLimit += parseInt(totalScore / 250);
+      if (enemies.length >= enemiesLimit) {
+        return;
+      }
+      var newEnemy = new PIXI.Sprite(textures.ghost);
+      newEnemy.x = vars.appWidth - 50 - Math.round(Math.random() * 50);
+      newEnemy.y = 50 + Math.round(Math.random() * 300);
+      newEnemy.isAlive = true;
+      newEnemy.movementDirection = 1;
+      container.addChild(newEnemy);
+      enemies.push(newEnemy);
+    }
+
+    function processEnemies() {
+      // process movement
+      var enemySpeed = speed / 50;
+      for (var i = 0; i < enemies.length; i++) {
+        const tmpEnemy = enemies[i];
+        tmpEnemy.x -= enemySpeed;
+
+        var enemyVerticalSpeed = 0;
+        var verticalDiff = train.y - tmpEnemy.y + 30;
+        enemyVerticalSpeed = Math.random() * verticalDiff / 100;
+        if (Math.random() > 0.95) {
+          tmpEnemy.movementDirection *= -1;
+        }
+        if (tmpEnemy.movementDirection == -1) {
+          enemyVerticalSpeed *= 0.5;
+        }
+        enemyVerticalSpeed *= tmpEnemy.movementDirection;
+        tmpEnemy.y += enemyVerticalSpeed;
+
+        // distance from canvas edges to remove enemies
+        var deleteOffset = 20; 
+        // NB: add menu height to top offset
+        var isOutOfBounds = (tmpEnemy.x > vars.appWidth - deleteOffset)
+          || (tmpEnemy.x < deleteOffset)
+          || (tmpEnemy.y > vars.appHeight - deleteOffset)
+          || (tmpEnemy.y < deleteOffset + menu.height);
+        if (isOutOfBounds) {
+          tmpEnemy.isAlive = false;
+        }
+      }
+
+      // process collisions - bullets
+      for (var i = 0; i < enemies.length; i++) {
+        for (var j = 0; j < bullets.length; j++) {
+          const tmpEnemyCollision = enemies[i];
+          const tmpBulletCollision = bullets[j];
+          if (testForAABB(tmpEnemyCollision, tmpBulletCollision)) {
+            tmpEnemyCollision.isAlive = false;
+            tmpBulletCollision.isAlive = false;
+            totalScore += 5;
+            soundFonk.play();
+          }
+        }
+      }
+
+      // process collisions - train
+      for (var i = 0; i < enemies.length; i++) {
+        const tmpEnemyKiller = enemies[i];
+        if (testForAABB(tmpEnemyKiller, train)) {
+            doGameOver();
+          }
+      }
+
+      // process cleanup
+      // get enemies to remove
+      var enemiesToRemove = enemies.filter(function(value, index, arr) {
+        return (value.isAlive == false);
+      });
+      for (var i = 0; i < enemiesToRemove.length; i++) {
+        const tmpEnemyRemove = enemiesToRemove[i];
+        tmpEnemyRemove.destroy();
+      }
+      // update enemies
+      var updatedEnemies = enemies.filter(function(value, index, arr) {
+        return (value.isAlive == true);
+      });
+      enemies = updatedEnemies.slice(0);
+
+    }
+
+    function doGameOver() {      
+      const graphics = new PIXI.Graphics();
+      graphics.beginFill(0x222222);
+      graphics.drawRect(0, 0, vars.appWidth, vars.appHeight);
+      graphics.endFill();
+
+      graphics.interactive = true;
+      graphics.buttonMode = true;
+      graphics.on('pointerdown', function() {
+        location.reload();
+      });
+
+      container.addChild(graphics);
+
+      const endGameTextStyle = new PIXI.TextStyle({
+        fontFamily: 'sans-serif',
+        size: 48,
+        fill: '#cccccc',
+        stroke: '#999999',
+        strokeThickness: 2,
+      });
+
+      var endGameDisplayScore = Math.round(totalScore);
+      const endGameText = new PIXI.Text('GAME OVER', endGameTextStyle);
+      const endGameScore = new PIXI.Text('SCORE : ' + endGameDisplayScore, endGameTextStyle);
+      const endGamePrompt = new PIXI.Text('click anywhere to restart', endGameTextStyle);
+
+      endGameText.x = 100;
+      endGameScore.x = 100;
+      endGamePrompt.x = 100;
+
+      endGameText.y = 200;
+      endGameScore.y = 250;
+      endGamePrompt.y = 350;
+
+      container.addChild(endGameText);
+      container.addChild(endGameScore);
+      container.addChild(endGamePrompt);
+
+      app.ticker.stop();
+    }
+
+    function doGameStart() {
+      const graphicsStart = new PIXI.Graphics();
+      graphicsStart.beginFill(0x222222);
+      graphicsStart.drawRect(0, 0, vars.appWidth, vars.appHeight);
+      graphicsStart.endFill();
+
+      graphicsStart.interactive = true;
+      graphicsStart.buttonMode = true;
 
 
-    // keyboard stuff
+      container.addChild(graphicsStart);
+
+      const startGameTextStyle = new PIXI.TextStyle({
+        fontFamily: 'sans-serif',
+        size: 48,
+        fill: '#cccccc',
+        stroke: '#999999',
+        strokeThickness: 2,
+      });
+
+      const startGameText = new PIXI.Text('Click to start', startGameTextStyle);
+
+      startGameText.x = 420;
+      startGameText.y = 250;
+      
+      container.addChild(startGameText);
+
+      graphicsStart.on('pointerdown', function(e) {
+        app.ticker.start();
+        graphicsStart.destroy();
+        startGameText.destroy();
+      });
+
+      app.ticker.update();
+      app.ticker.stop();
+
+    }
+
+    function testForAABB (object1, object2) {
+      const bounds1 = object1.getBounds();
+      const bounds2 = object2.getBounds();
+      var part1 = (bounds1.x < (bounds2.x + bounds2.width));
+      var part2 = ((bounds1.x + bounds2.width) > bounds2.x);
+      var part3 = (bounds1.y < (bounds2.y + bounds2.height));
+      var part4 = ((bounds1.y + bounds2.height) > bounds2.y);
+      return part1 && part2 && part3 && part4;
+    }
+
+    app.renderer.plugins.interaction.on('pointerdown', fireBulletHandler);
+
+    function fireBulletHandler(event) {
+        var coordX = event.data.global.x;
+        var coordY = event.data.global.y;
+        if ((coordX < menu.width) && (coordY < menu.height)) {
+          return;
+        }
+        // create bullet
+        var newBullet = new PIXI.Sprite(textures.fonk);
+        // set origin point
+        newBullet.x = fonk.x;
+        newBullet.y = fonk.y;
+        // set target point
+        newBullet.targetX = coordX;
+        newBullet.targetY = coordY;
+        // calculate speed
+        var angle = Math.atan2(coordY - fonk.y, coordX - fonk.x);
+        newBullet.speedX = vars.bulletSpeed * Math.cos(angle);
+        newBullet.speedY = vars.bulletSpeed * Math.sin(angle);
+        // set rotation pivot
+        newBullet.pivot.x = newBullet.width / 2;
+        newBullet.pivot.y = newBullet.height / 2;
+        // set keepalive flag
+        newBullet.isAlive = true;
+        // spawn bullet object
+        container.addChild(newBullet);
+
+        bullets.push(newBullet);
+        soundThrow.play();
+    }
+
+    // keyboard processing core
     function keyboard(value) {
       let key = {};
       key.value = value;
@@ -131,6 +530,47 @@
       };
       
       return key;
+    }
+
+    function menuButtonResetOnClick() {
+      topScore = 0;
+      menuTopScoreText.text = topScore;
+      localStorage.setItem('topScore', 0);
+    }
+
+    function menuButtonPauseOnClick() {
+
+      settings.isRunning = ! settings.isRunning;
+
+
+      if (settings.isRunning) {
+        menuButtonPause.texture = textures.menuButtonPause;
+        app.ticker.start();
+      } else {
+        menuButtonPause.texture = textures.menuButtonPlay;
+        app.ticker.update();
+        app.ticker.stop();
+      }
+    }
+
+    function menuButtonSoundOnClick() {
+      settings.isSoundOn = ! settings.isSoundOn;
+      localStorage.setItem('isMuted', ! settings.isSoundOn);
+      updateMenuButtonSound();
+    }
+
+    function updateMenuButtonSound() {
+      if (settings.isSoundOn) {
+        menuButtonSound.texture = textures.menuButtonSound;
+        soundChaga.muted = false;
+        soundThrow.muted = false;
+        soundFonk.muted = false;
+      } else {
+        menuButtonSound.texture = textures.menuButtonSoundOff;
+        soundChaga.muted = true;
+        soundThrow.muted = true;
+        soundFonk.muted = true;
+      }
     }
     
   </script>
